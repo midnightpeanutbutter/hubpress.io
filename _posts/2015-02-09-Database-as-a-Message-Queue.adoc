@@ -1,2 +1,13 @@
 = Database as a Message Queue
 
+Conventional wisdom states that you should not try to use a database as a message queue.  There are a lot of solid reasons this is the case.  Polling, lock contention, index churn and data growth are just a few that have been https://blog.engineyard.com/2011/5-subtle-ways-youre-using-mysql-as-a-queue-and-why-itll-bite-you/[written] http://kejser.org/implementing-message-queues-in-relational-databases/[about] https://functionwhatwhat.com/why-you-should-not-use-an-rdbms-for-messaging/[before].
+
+However, adding a heavyweight message queue system, like RabbitMQ, into your application architecture can be a tough sell when you don't need to process more than roughly 500 messages per second.  It's much better to understand the nuances of a problem and the benefits and limitations of all reasonable solutions than to try and paint everything in black and white.
+
+There are two things to consider:
+
+* Do you need a high throughput message queue?
+* Does your team have the chops to implement a solid message queue using a database?
+
+Here's my design for a database-backed message queue.  A basic benchmark shows it's capable of about 1,000 messages per second on my Intel Core i5 laptop.
+
