@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="HandheldFriendly" content="True" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Database as a Message Queue</title>
+    <meta name="description" content="" />
+    <link href="//fonts.googleapis.com/css?family=Noto+Sans:300,400,700" rel="stylesheet" type="text/css">
+    <link href="//fonts.googleapis.com/css?family=Noto+Serif:400,700,400italic" rel="stylesheet" type="text/css">
+    <link href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" rel="stylesheet">
+    <link href="http://midnightpeanutbutter.com/themes/Saga/assets/css/style.css?v=1.0.0" rel="stylesheet" type="text/css">
+    <link href="http://midnightpeanutbutter.com/themes/Saga/assets/css/animate.min.css?v=1.0.0" rel="stylesheet" type="text/css">
+    <link href="http://midnightpeanutbutter.com/themes/Saga/favicon.ico" rel="shortcut icon">
+    <link rel="canonical" href="http://midnightpeanutbutter.com/2015/02/09/Database-as-a-Message-Queue.html" />
+    
+    <meta property="og:site_name" content="Midnight Peanut Butter" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Database as a Message Queue" />
+    <meta property="og:description" content="Conventional wisdom states that you should not try to use a database as a message queue.  There are a lot of solid reasons this is the case.  Polling, lock contention, index churn and data growth are just a few that..." />
+    <meta property="og:url" content="http://midnightpeanutbutter.com/2015/02/09/Database-as-a-Message-Queue.html" />
+    <meta property="article:published_time" content="2015-02-09T05:00:00.000Z" />
+    <meta property="article:modified_time" content="2015-02-09T20:55:33.662Z" />
+    
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Database as a Message Queue" />
+    <meta name="twitter:description" content="Conventional wisdom states that you should not try to use a database as a message queue.  There are a lot of solid reasons this is the case.  Polling, lock contention, index churn and data growth are just a few that..." />
+    <meta name="twitter:url" content="http://midnightpeanutbutter.com/2015/02/09/Database-as-a-Message-Queue.html" />
+    
+    <script type="application/ld+json">
+{
+    "@context": "http://schema.org",
+    "@type": "Article",
+    "publisher": "Midnight Peanut Butter",
+    "author": {
+        "@type": "Person",
+        "image": "https://avatars.githubusercontent.com/u/9065574?v=3",
+        "url": "undefined/author/undefined"
+    },
+    "headline": "Database as a Message Queue",
+    "url": "http://midnightpeanutbutter.com/2015/02/09/Database-as-a-Message-Queue.html",
+    "datePublished": "2015-02-09T05:00:00.000Z",
+    "dateModified": "2015-02-09T20:55:33.662Z",
+    "description": "Conventional wisdom states that you should not try to use a database as a message queue.  There are a lot of solid reasons this is the case.  Polling, lock contention, index churn and data growth are just a few that..."
+}
+    </script>
+
+    <meta name="generator" content="Ghost ?" />
+    <link rel="alternate" type="application/rss+xml" title="Midnight Peanut Butter" href="http://midnightpeanutbutter.com/rss" />
+</head>
+<body class="post-template">
+    <header id="header" class="animated fadeIn">
+    <div class="header-background">
+    <section class="blog-content">
+        <a id="site-url" class="blog-title" href="http://midnightpeanutbutter.com">Midnight Peanut Butter</a>
+        <span class="blog-description">Late night coding and snacking</span>
+        <nav class="links fadeIn animated">
+            <ul>
+                <!-- <li class="rss"><a title="RSS Feed" href="/rss/"><i class="fa fa-fw fa-rss-square"></i></a></li> -->
+        
+            </ul>
+        </nav>
+    </section>
+    <section class="header-content">
+        <h1 class="post-title animated fadeInUp">Database as a Message Queue</h1>
+        <span class="post-data"><span class="date animated fadeInUp"><i class="fa fa-clock-o"></i> <time class="timesince date" data-timesince="1423458000" datetime="2015-02-09T00:00" title="09 February 2015">16 hours ago</time></span>
+            
+            <span class="author animated fadeInUp"><i class="fa fa-user"></i> <a href=""></a></span></span>
+    </section>
+    </div>
+</header>
+<main id="main" class="content">
+    <article itemtype="http://schema.org/BlogPosting" class="animated fadeIn content post post">
+        <section class="post-content">
+            <div class="paragraph">
+<p>Conventional wisdom states that you should not try to use a database as a message queue.  There are a lot of solid reasons this is the case.  Polling, lock contention, index churn and data growth are just a few that have been <a href="https://blog.engineyard.com/2011/5-subtle-ways-youre-using-mysql-as-a-queue-and-why-itll-bite-you/">written</a> <a href="http://kejser.org/implementing-message-queues-in-relational-databases/">about</a> <a href="https://functionwhatwhat.com/why-you-should-not-use-an-rdbms-for-messaging/">before</a>.</p>
+</div>
+<div class="paragraph">
+<p>However, adding a heavyweight message queue system, like RabbitMQ, into your application architecture can be a tough sell when you don&#8217;t need to process more than roughly 500 messages per second.  It&#8217;s much better to understand the nuances of a problem and the benefits and limitations of all reasonable solutions than to try and paint everything in black and white.</p>
+</div>
+<div class="paragraph">
+<p>There are two things to consider:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Do you need a high throughput message queue?</p>
+</li>
+<li>
+<p>Does your team have the chops to implement a solid message queue using a database?</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Here&#8217;s my design for a database-backed message queue.  A basic benchmark shows it&#8217;s capable of about 1,000 messages per second on my Intel Core i5 laptop.</p>
+</div>
+        </section>
+
+    
+        <section class="post-comments">
+          <div id="disqus_thread"></div>
+          <script type="text/javascript">
+          var disqus_shortname = 'midnightpeanutbutter'; // required: replace example with your forum shortname
+          /* * * DON'T EDIT BELOW THIS LINE * * */
+          (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+          })();
+          </script>
+          <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+          <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+        </section>
+    
+    </article>
+
+</main>
+    <footer class="animated fadeIn" id="footer">
+        <section class="colophon">
+          <section class="copyright">Copyright &copy; <span itemprop="copyrightHolder">Midnight Peanut Butter</span>. <span rel="license">All Rights Reserved</span>.</section>
+          <section class="poweredby">Published with <a class="icon-ghost" href="http://hubpress.io">HubPress</a></section>
+        </section>
+        <section class="bottom">
+          <section class="attribution">
+            <a href="http://github.com/Reedyn/Saga">Built with <i class="fa fa-heart"></i> and Free and Open-Source Software</a>.
+          </section>
+        </section>
+    </footer>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js?v="></script>
+    <script src="http://midnightpeanutbutter.com/themes/Saga/assets/js/scripts.js?v=1.0.0"></script>
+    
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-32686521-2', 'auto');
+    ga('send', 'pageview');
+
+    </script>
+</body>
+</html>
